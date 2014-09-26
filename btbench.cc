@@ -13,6 +13,7 @@
 #define FRAMES 64
 
 #define BOX_COUNT 1000
+#define ITERATIONS 100000
 
 typedef struct {
   float mean;
@@ -148,7 +149,79 @@ result_t bench_bullet() {
   return measure(times);
 }
 
+result_t bench_btSequentialImpulseConstraintSolver() {
+	btSolverBody body_template;
+	btSolverConstraint constraint_template;
+
+	body_template.m_worldTransform.setIdentity();
+	body_template.m_deltaLinearVelocity.setValue(1.01f,1.01f,1.01f);
+	body_template.m_deltaAngularVelocity.setValue(1.01f,1.01f,1.01f);
+	body_template.m_angularFactor.setValue(1.01f,1.01f,1.01f);
+	body_template.m_linearFactor.setValue(1.01f,1.01f,1.01f);
+	body_template.m_invMass.setValue(1.01f,1.01f,1.01f);
+	body_template.m_pushVelocity.setValue(1.01f,1.01f,1.01f);
+	body_template.m_turnVelocity.setValue(1.01f,1.01f,1.01f);
+	body_template.m_linearVelocity.setValue(1.01f,1.01f,1.01f);
+	body_template.m_angularVelocity.setValue(1.01f,1.01f,1.01f);
+	body_template.m_externalForceImpulse.setValue(1.01f,1.01f,1.01f);
+	body_template.m_externalTorqueImpulse.setValue(1.01f,1.01f,1.01f);
+	body_template.m_originalBody = 0;
+
+	constraint_template.m_relpos1CrossNormal.setValue(1.01f,1.01f,1.01f);
+	constraint_template.m_relpos2CrossNormal.setValue(1.01f,1.01f,1.01f);
+	constraint_template.m_angularComponentA.setValue(1.01f,1.01f,1.01f);
+	constraint_template.m_angularComponentB.setValue(1.01f,1.01f,1.01f);
+	
+	constraint_template.m_appliedPushImpulse = 1.01f;
+	constraint_template.m_appliedImpulse = 1.01f;
+	
+	constraint_template.m_friction = 1.01f;
+	constraint_template.m_jacDiagABInv = 1.01f;
+	constraint_template.m_rhs = 1.01f;
+	constraint_template.m_cfm = 1.01f;
+	constraint_template.m_lowerLimit = 0.01f;
+	constraint_template.m_upperLimit = 1000.01f;
+	constraint_template.m_rhsPenetration = 1.01f;
+
+	btSequentialImpulseConstraintSolver solver;
+	btSingleConstraintRowSolver signle_constraint_solver = solver.getActiveConstraintRowSolverGeneric();
+
+	printf("warming...\n");
+	for (int i = 0; i < WARMUP; ++i) {
+		///step the simulation
+		btSolverBody body = body_template;
+		btSolverConstraint constraint = constraint_template;
+		signle_constraint_solver(body, body, constraint);
+  	}
+
+  	float checksum = 0.0f;
+
+  	printf("benching...\n");
+	clock_t times[FRAMES]; 
+	for (int i = 0; i < FRAMES; ++i) {
+		int f = 0;
+		clock_t start = clock();
+		for (int j = 0; j < ITERATIONS; ++j) {
+			btSolverBody body = body_template;
+			btSolverConstraint constraint = constraint_template;
+			checksum += signle_constraint_solver(body, body, constraint);
+	    }
+		clock_t end = clock();
+		times[i] = end - start;
+	}
+
+  printf("Checksum: %f\n", checksum);
+
+  return measure(times);
+}
+
+
 int main(int argc, char** argv) {
-  result_t result = bench_bullet();
-  printf("Benchmark complete.\n  ms/frame: %f 5th %%ile: %f 95th %%ile: %f\n", result.mean, result.pc_5th, result.pc_95th);
+  result_t result;
+
+  result = bench_bullet();
+  printf("Simulation benchmark complete.\n  ms/frame: %f 5th %%ile: %f 95th %%ile: %f\n", result.mean, result.pc_5th, result.pc_95th);
+
+  result = bench_btSequentialImpulseConstraintSolver();
+  printf("btSequentialImpulseConstraintSolver benchmark complete.\n  ms/frame: %f 5th %%ile: %f 95th %%ile: %f\n", result.mean, result.pc_5th, result.pc_95th);
 }
